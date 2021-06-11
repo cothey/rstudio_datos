@@ -1,0 +1,115 @@
+#LIBRERIA QUE UTILICE
+
+library(tidyverse)
+library(dplyr)
+library(reshape)
+library(sf)
+library("xlsx")
+library(dslabs)
+library(magick)
+
+#DE DONDE TRAJE LOS DATOS DE LAS BARRIOS
+barrios <- st_read('http://cdn.buenosaires.gob.ar/datosabiertos/datasets/barrios/barrios.geojson')
+
+#DE DONDE TRAJE LOS DATOS DEL VALOR DEL M2
+#https://data.buenosaires.gob.ar/dataset/terrenos-valor-oferta
+Terrenos <- read.csv("C:/Users/XXXX/Desktop/Terrenos/precio-de-terrenos-2001.csv", sep=";")
+
+# Selecion de Columnas
+
+TERRENOS <- select (Terrenos, barrio, u_s_m2)
+
+names(TERRENOS) = c("BARRIOS" , "VALORM2USD" )
+
+
+#Sacar la desviacion estandar
+
+DesEst <-
+TERRENOS %>% 
+summarise( sd(TERRENOS$VALORM2USD), mean(TERRENOS$VALORM2USD))
+
+#Filtrar por la tercera desviacion estandar
+
+TERRENOS <- TERRENOS %>%
+  filter(VALORM2USD <= (DesEst$mean +(3*(DesEst$sd)))) 
+  
+
+
+#FILTRAR Y CAMBIAR VALORES DE COLUMNA 
+
+TERRENOS$BARRIOS [TERRENOS$BARRIOS == "BARRACAS ESTE"] <-"BARRACAS"
+TERRENOS$BARRIOS [TERRENOS$BARRIOS == "BARRACAS OESTE"] <-"BARRACAS"
+TERRENOS$BARRIOS [TERRENOS$BARRIOS == "FLORES NORTE"] <-"FLORES"
+TERRENOS$BARRIOS [TERRENOS$BARRIOS == "FLORES SUR"] <-"FLORES"
+TERRENOS$BARRIOS [TERRENOS$BARRIOS == "NUÃ‘EZ"] <-"NUÑEZ"
+TERRENOS$BARRIOS [TERRENOS$BARRIOS == "VILLA DEVOTO NORTE"] <-"VILLA DEVOTO"
+TERRENOS$BARRIOS [TERRENOS$BARRIOS == "VILLA DEVOTO SUR"] <-"VILLA DEVOTO"
+TERRENOS$BARRIOS [TERRENOS$BARRIOS == "MONTSERRAT"] <-"MONSERRAT"
+TERRENOS$BARRIOS [TERRENOS$BARRIOS == "VELEZ SARFIELD"] <-"VELEZ SARSFIELD"
+TERRENOS$BARRIOS [TERRENOS$BARRIOS == "GOGHLAND"] <-"COGHLAN"
+TERRENOS$BARRIOS [TERRENOS$BARRIOS == "VILLA GENERAL MITRE"] <-"VILLA GRAL. MITRE"
+TERRENOS$BARRIOS [TERRENOS$BARRIOS == "POMPEYA"] <-"NUEVA POMPEYA"
+TERRENOS$BARRIOS [TERRENOS$BARRIOS == "VILLA PUYRREDON"] <-"VILLA PUEYRREDON"
+TERRENOS$BARRIOS [TERRENOS$BARRIOS == "VERSAILLES"] <-"VERSALLES"
+
+
+
+
+#Agrupar, sumar y promediar
+
+
+terrenoPORCOMUNA <-
+  TERRENOS %>% 
+  group_by(BARRIOS) %>% 
+  summarise(VALORM2USD= mean(VALORM2USD))
+
+
+# RENOMBRAR COLUMNAS
+names(terrenoPORCOMUNA) = c("barrio" , "USD")
+
+
+#ESCRIBIR UN ARCHIVO
+#write.xlsx(x, file, sheetName = "Sheet1", 
+#col.names = TRUE, row.names = TRUE, append = FALSE)
+
+#Sacar los datos en formato excel
+write.xlsx(as.data.frame(terrenoPORCOMUNA), file = "barrios2001.xlsx",sheetName = "2001", col.names = TRUE)
+
+
+#UNIR
+
+TERRENOSPORBARRIOs <- left_join(barrios, terrenoPORCOMUNA)
+
+
+
+
+#PARA HACER EL MAPA DE BARRIO
+
+
+MAPA01 <- ggplot(TERRENOSPORBARRIOs) +
+          geom_sf(aes(fill = USD)) +
+          scale_fill_distiller(palette = "Spectral")+
+          ggtitle("VALOR DEL M2 CABA 2001")
+
+
+png(filename = "2001.png")
+MAPA01
+dev.off()
+file.show("2001.png")
+
+
+#PARA HACER EL GRAFICO DE BARRIO
+
+png(filename = "GRAFICO2001.png")
+ggplot(TERRENOSPORBARRIOs) +
+  geom_bar(aes(x = barrio, weight = USD)) +
+  coord_flip()+
+  labs(title = "VALOR M2 CABA 2001", y="VALOR EN USD", x="BARRIOS")+
+  theme(text = element_text(size=10))+
+  theme(plot.title = element_text(size = rel(2),
+                                  vjust = 1,
+                                  #face="bold"
+                            ))
+  
+dev.off()
+file.show("GRAFICO2001.png")
